@@ -6,6 +6,16 @@ public class Constans {
     public final static String NAME = "name";
 
     public final static String URL_DEV_SERV = "http://201.156.230.48:3030/lecturas/lecturas/PostList";
+
+    // Credenciales para obtener un JWT y poder hacer peticiones (POST).
+    public final static String URL_AUTH = "http://201.156.230.48:3030/egesio/authenticate";
+    /*
+    {
+        usuario: "adminDev",
+        contrasenia: "admin123456"
+    }
+    */
+
     public final static String TOKENTMPBARER = "Barer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYWY1ZmNkMi00MjU2LTRjOTMtOGJiMi1kOGU4YWIxNjViMDUiLCJuYW1laWQiOiI3OTAiLCJ1c3VhcmlvIjoiZWRnYXIubWFydGluZXpAcGVvcGxlLW1lZGlhLmNvbS5teCIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IlBlcnNvbmEiLCJuYmYiOjE2MTAwNDc4MDksImV4cCI6MTYxNzgyMzgwOX0.QVLImdmRQS5pmD5li03TdZTpVV-HIT-FKzI5fQIm-OY";
     public final static int timeout = 300000;
 
