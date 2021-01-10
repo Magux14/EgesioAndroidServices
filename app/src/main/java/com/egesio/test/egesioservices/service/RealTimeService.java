@@ -80,7 +80,14 @@ public class RealTimeService extends Service {
             creaNotificacion();
             manager = CommandManager.getInstance(this);
         }catch (Exception e){
-            Log.d("EGESIO", e.getMessage());
+            try{
+                if(App.mConnected)
+                    App.mBluetoothLeService.disconnect();
+                LocalBroadcastManager.getInstance(this).unregisterReceiver(mGattUpdateReceiver);
+                Intent intentGeoRatioMonitoring = new Intent(getApplicationContext(), RealTimeService.class);
+                getApplicationContext().startService(intentGeoRatioMonitoring);
+            }catch (Exception e2){
+            }
         }
     }
 
@@ -92,9 +99,18 @@ public class RealTimeService extends Service {
             creaAlarmaRecurrenteBluetooth();
             inicializaValoresPref(this);
             LocalBroadcastManager.getInstance(this).registerReceiver(mGattUpdateReceiver, makeGattUpdateIntentFilter());
+            Sharedpreferences.getInstance(this).escribeValorString(Constans.LAST_TIME_GENERAL, String.valueOf(System.currentTimeMillis()));
             sendMessageToUI(this);
         }catch (Exception e){
-            Log.d("EGESIO", e.getMessage());
+            //Log.d("EGESIO", e.getMessage());
+            try{
+                if(App.mConnected)
+                    App.mBluetoothLeService.disconnect();
+                LocalBroadcastManager.getInstance(this).unregisterReceiver(mGattUpdateReceiver);
+                Intent intentGeoRatioMonitoring = new Intent(getApplicationContext(), RealTimeService.class);
+                getApplicationContext().startService(intentGeoRatioMonitoring);
+            }catch (Exception e2){
+            }
         }
         return super.onStartCommand(intent, flags, startId); //START_NOT_STICKY;
     }
@@ -105,25 +121,15 @@ public class RealTimeService extends Service {
         Sharedpreferences.getInstance(context).escribeValorString(Constans.IDPULSERA, Sharedpreferences.getInstance(context).obtenValorString(Constans.IDPULSERA, "117"));
         Sharedpreferences.getInstance(context).escribeValorString(Constans.PERIODO, Sharedpreferences.getInstance(context).obtenValorString(Constans.PERIODO, "300"));
 
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.TEMPERATURE_COUNT, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.HEART_COUNT, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_OXYGEN_COUNT, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_PRESSURE_COUNT, "0");
 
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.TEMPERATURE_KEY, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.HEART_KEY, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_OXYGEN_KEY, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_PRESSURE_KEY, "0/0");
+        Sharedpreferences.getInstance(context).escribeValorString(Constans.TEMPERATURE_KEY, "255");
+        Sharedpreferences.getInstance(context).escribeValorString(Constans.HEART_KEY, "255");
+        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_OXYGEN_KEY, "255");
+        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_PRESSURE_KEY, "255/255");
 
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.HEART_LAST, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_OXYGEN_LAST, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_PRESSURE_LAST, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.TEMPERATURE_LAST, "0");
+        Sharedpreferences.getInstance(context).escribeValorString(Constans.COUNT_GENERAL, "0");
+        Sharedpreferences.getInstance(context).escribeValorString(Constans.LAST_TIME_GENERAL, "0");
 
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.TEMPERATURE_TIME, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.HEART_TIME, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_OXYGEN_TIME, "0");
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_PRESSURE_TIME, "0");
     }
 
     @Override
@@ -140,19 +146,30 @@ public class RealTimeService extends Service {
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(mGattUpdateReceiver);
+
         try{
-            for(int i = 0; i < 100000; i++);
-            stopService(new Intent(this, RealTimeService.class));
-            getApplicationContext().startService(new Intent(getApplicationContext(), RealTimeService.class));
+            if(App.mConnected)
+                App.mBluetoothLeService.disconnect();
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(mGattUpdateReceiver);
+            Intent intentGeoRatioMonitoring = new Intent(getApplicationContext(), RealTimeService.class);
+            getApplicationContext().startService(intentGeoRatioMonitoring);
         }catch (Exception e){
         }
     }
 
     private void sendMessageToUI(Context context) {
         try{
-            Intent intent = new Intent(MedicionesService.ACTION_MEDICION_BROADCAST);
-            LocalBroadcastManager.getInstance(context).sendBroadcastSync(intent);
+            Timer mTimer = new Timer(true);
+            mTimer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    if(App.mBluetoothLeService != null){
+                        Intent intent = new Intent(MedicionesService.ACTION_MEDICION_BROADCAST);
+                        LocalBroadcastManager.getInstance(context).sendBroadcastSync(intent);
+                        mTimer.cancel();
+                    }
+                }
+            }, 100, 100);
         }catch (Exception e){
             Log.d(TAG, e.getMessage());
         }
@@ -171,254 +188,170 @@ public class RealTimeService extends Service {
                 new SendDataFirebase(context).execute("{\"action\": \"ACTION_MEDICION_BROADCAST - " + Utils.getHora() + "\"}");
             } else if (BluetoothLeService.ACTION_GATT_CONNECTED.equals(action)) {
                 new SendDataFirebase(context).execute("{\"action\": \"ACTION_GATT_CONNECTED - " +  Utils.getHora() + "\"}");
+                manager.heartRateSensor(1);
+                manager.temperatureSensor(1);
             } else if (BluetoothLeService.ACTION_GATT_DISCONNECTED.equals(action)) {
                 inicializaValoresPref(context);
                 new SendDataFirebase(context).execute("{\"action\": \"DISCONECT - " + Utils.getHora() + "\"}");
+                Sharedpreferences.getInstance(context).escribeValorString(Constans.LAST_TIME_GENERAL, String.valueOf(System.currentTimeMillis()));
                 LocalBroadcastManager.getInstance(context).unregisterReceiver(mGattUpdateReceiver);
-                /*Timer mTimer = new Timer(true);
-                mTimer.schedule(new TimerTask() {
-                    @Override
-                    public void run() {*/
                        if(!App.mConnected){
                            LocalBroadcastManager.getInstance(context).registerReceiver(mGattUpdateReceiver, makeGattUpdateIntentFilter());
                            App.mBluetoothLeService.connect(Sharedpreferences.getInstance(context).obtenValorString(Constans.MACADDRESS, "00:00:00:00:00:00"));
                        }
-                    /*}
-                }, 2000);*/
             } else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)) {
                 final byte[] txValue = intent.getByteArrayExtra(BluetoothLeService.EXTRA_DATA);
                 List<Integer> data = DataHandlerUtils.bytesToArrayList(txValue);
                 //new SendDataFirebase(context).execute("{\"action\": \"DATA_AVAILABLE - " + data + " - " + Utils.getHora() + "\"}");
+                //manager.temperatureSensor(1);
                 if (data.get(4) == 0X91) {
-                    //manager.realTimeAndOnceMeasure(0X0A, 1); // 0X09(Single) 0X0A(Real-time)
-
-                    /*Timer mTimer1 = new Timer(true);
-                    mTimer1.schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            manager.heartRateSensor(1);
-                        }
-                    }, 100);
-
-                    Timer mTimer2 = new Timer(true);
-                    mTimer2.schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            manager.bloodOxygenSensor( 1);
-                        }
-                    }, 1000);
-
-                    Timer mTimer3 = new Timer(true);
-                    mTimer3.schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            manager.bloodPressureSensor( 1);
-                        }
-                    }, 2000);*/
-
-                    //manager.getOneClickMeasurementCommand(1);
-
-                    Timer mTimer4 = new Timer(true);
-                    mTimer4.schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            manager.temperatureSensor(1);
-                        }
-                    }, 100);
-
+                    manager.findBracelet();
+                    manager.heartRateSensor(1);
                 }
 
-                if (data != null && data.size() == 13 && data.get(4) == 0x32) {
-                    new SendDataFirebase(context).execute("{\"action\": \"REGRESO TODAAAAAS - " + Utils.getHora() + "\"}");
-
-                    String heartRateString = "";
-                    String bloodOxygenString = "";
-                    String temperatureString = "";
-                    String bloodPressureString = "";
-
-                    Integer heartRate = data.get(6);
-                    Integer bloodOxygen = data.get(7);
-                    Integer bloodPressureHypertension = data.get(8);
-                    Integer bloodPressureHypotension = data.get(9);
-                    Float temp = 0.0f;
-
-                    if (data.get(11) != null && data.get(12) != null && !isNaN(data.get(11)) && !isNaN(data.get(12)))
-                        temp = parseFloat(data.get(11) + "." + data.get(12));
-
-                    if (heartRate != null && !isNaN(heartRate) && heartRate > 40 && heartRate < 226)
-                        heartRateString = String.valueOf(heartRate);
-
-                    if (bloodOxygen != null && !isNaN(bloodOxygen) && bloodOxygen > 70 && bloodOxygen <= 100)
-                        bloodOxygenString = String.valueOf(bloodOxygen);
-
-                    if (temp != null && !isNaN(temp) && temp > 35 && temp < 43)
-                        temperatureString = String.valueOf(temp);
-
-                    if (bloodPressureHypertension != null && !isNaN(bloodPressureHypertension) &&
-                            bloodPressureHypertension > 70 && bloodPressureHypertension < 200 &&
-                            !isNaN(bloodPressureHypotension) && bloodPressureHypotension > 40 && bloodPressureHypotension < 130)
-                        bloodPressureString = bloodPressureHypertension + "/" + bloodPressureHypotension;
-
-                    String r = "";
-
-                    r += "-" + heartRateString;
-                    r += "-" + bloodOxygenString;
-                    r += "-" + temperatureString;
-                    r += "-" + bloodPressureString;
-
-                    new SendDataFirebase(context).execute("{\"action\": \"VALORES TODAAAAAS - " + r + "-" + Utils.getHora() + "\"}");
-
-                    Sharedpreferences.getInstance(context).escribeValorString(Constans.HEART_KEY, String.valueOf(heartRateString));
-                    Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_OXYGEN_KEY, String.valueOf(bloodOxygenString));
-                    Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_PRESSURE_KEY, String.valueOf(bloodPressureString));
-                    Sharedpreferences.getInstance(context).escribeValorString(Constans.TEMPERATURE_KEY, String.valueOf(temperatureString));
-
-
-                }
-
-                if (data.get(0) == 0xAB && data.get(4) == 0x10) { //31
+                if (data.get(0) == 0xAB && data.get(4) == 0x31) {
                     switch (data.get(5)) {
                         case 0X0A:
                             //Heart Rate（Real-time）
-                            new SendDataFirebase(context).execute("{\"action\": \"HEART - " + Utils.getHora() + "\"}");
-                            /*String theLastHeart = Sharedpreferences.getInstance(context).obtenValorString(Constans.HEART_LAST, "0");
-                            if(theLastHeart.equals("0"))
-                                Sharedpreferences.getInstance(context).escribeValorString(Constans.HEART_LAST, String.valueOf(System.currentTimeMillis()));
-                            if(isLecturasCompletas(context, "HEART")) {
-                                validaDatos(data, "HEART", context);
-                                manager.realTimeAndOnceMeasure(0x0A, 0);
-                                Timer mTimer = new Timer(true);
-                                mTimer.schedule(new TimerTask() {
-                                    @Override
-                                    public void run() {
-                                        manager.realTimeAndOnceMeasure(0X12, 1); // ：0X11(Single) 0X12(Real-time)
-                                }
-                                }, 1000);
-                            }*/
-
+                            int heartRate = data.get(6);
+                            //new SendDataFirebase(context).execute("{\"action\": \"HEART - " + data + " - " + Utils.getHora() + "\"}");
+                            //manager.getOneClickMeasurementCommand(1);
+                            manager.temperatureSensor(1);
+                            manager.bloodOxygenSensor(1);
+                            guardaDato(context, Constans.HEART_KEY, String.valueOf(heartRate));
+                            validaLecturas(context);
                             break;
                         case 0x12:
                             //Blood Oxygen（Real-time）
-                            new SendDataFirebase(context).execute("{\"action\": \"BLOOD_OXYGEN - " + Utils.getHora() + "\"}");
-                            /*String theLastOxygen = Sharedpreferences.getInstance(context).obtenValorString(Constans.BLOOD_OXYGEN_LAST, "0");
-                            if(theLastOxygen.equals("0"))
-                                Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_OXYGEN_LAST, String.valueOf(System.currentTimeMillis()));
-                            if(isLecturasCompletas(context, "BLOOD_OXYGEN")) {
-                                validaDatos(data, "BLOOD_OXYGEN", context);
-                                manager.realTimeAndOnceMeasure(0X12, 0);
-                                Timer mTimer2 = new Timer(true);
-                                mTimer2.schedule(new TimerTask() {
-                                    @Override
-                                    public void run() {
-                                        manager.realTimeAndOnceMeasure(0X22, 1); // ：0X21(Single) 0X22(Real-time)
-                                    }
-                                }, 1000);
-                            }*/
+                            int bloodOxygen = data.get(6);
+                            //new SendDataFirebase(context).execute("{\"action\": \"OXYGEN - " + data + " - " + Utils.getHora() + "\"}");
+                            manager.temperatureSensor(1);
+                            manager.bloodPressureSensor(1);
+                            guardaDato(context, Constans.BLOOD_OXYGEN_KEY, String.valueOf(bloodOxygen));
+                            validaLecturas(context);
                             break;
                         case 0x22:
                             //Blood Pressure（Real-time）
-                            new SendDataFirebase(context).execute("{\"action\": \"BLOOD_PRESSURE - " + Utils.getHora() + "\"}");
-                            /*String theLastPressure = Sharedpreferences.getInstance(context).obtenValorString(Constans.BLOOD_PRESSURE_LAST, "0/0");
-                            if(theLastPressure.equals("0"))
-                                Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_PRESSURE_LAST, String.valueOf(System.currentTimeMillis()));
-                            if(isLecturasCompletas(context, "BLOOD_PRESSURE")) {
-                                validaDatos(data, "BLOOD_PRESSURE", context);
-                                manager.realTimeAndOnceMeasure(0X22, 0);
-                                Timer mTimer3 = new Timer(true);
-                                mTimer3.schedule(new TimerTask() {
-                                    @Override
-                                    public void run() {
-                                        manager.realTimeAndOnceMeasure(0X0A, 1);
-                                    }
-                                }, 1000);
-                            }*/
+                            int bloodPressureHypertension = data.get(6);
+                            int bloodPressureHypotension = data.get(7);
+                            //new SendDataFirebase(context).execute("{\"action\": \"PRESSURE - " + data + " - " + Utils.getHora() + "\"}");
+                            manager.temperatureSensor(1);
+                            manager.heartRateSensor(1);
+                            guardaDato(context, Constans.BLOOD_PRESSURE_KEY, bloodPressureHypertension + "/" + bloodPressureHypotension);
+                            validaLecturas(context);
                             break;
                     }
                 }
 
                 if (data.get(0) == 0xAB && data.get(4) == 0x86) {
-                    new SendDataFirebase(context).execute("{\"action\": \"TEMP - " + Utils.getHora() + "\"}");
-                    String theLastTemperature = Sharedpreferences.getInstance(context).obtenValorString(Constans.TEMPERATURE_LAST, "0");
-                    if(theLastTemperature.equals("0"))
-                        Sharedpreferences.getInstance(context).escribeValorString(Constans.TEMPERATURE_LAST, String.valueOf(System.currentTimeMillis()));
-                    if(isLecturasCompletas(context, "TEMPERATURE")) {
-                        validaDatos(data, "TEMPERATURE", context);
-                        new SendDataFirebase(context).execute("{\"action\": \"APAGO TODAS - " + Utils.getHora() + "\"}");
-                        manager.getOneClickMeasurementCommand(0);
-                        //App.mBluetoothLeService.disconnect();
-                        //manager.temperatureSensor(0);
-                        /*Timer mTimer4 = new Timer(true);
-                        mTimer4.schedule(new TimerTask() {
-                            @Override
-                            public void run() {
-                               // manager.temperatureSensor(0);
-                                manager.realTimeAndOnceMeasure(0x0A, 1);
-                            }
-                        }, 1000);*/
-                    }else{
-                        if(Integer.valueOf(Sharedpreferences.getInstance(context).obtenValorString("TEMPERATURE_COUNT", "0")) == 3){
-                            new SendDataFirebase(context).execute("{\"action\": \"PRENDO TODAS - " + Utils.getHora() + "\"}");
-                            manager.getOneClickMeasurementCommand(1);
-                        }
-                    }
+                    //new SendDataFirebase(context).execute("{\"action\": \"TEMP - " + Utils.getHora() + "\"}");
+                    int entero = data.get(6);
+                    int decimal = data.get(7);
+                    guardaDato(context, Constans.TEMPERATURE_KEY, entero + "." + decimal);
+                    validaLecturas(context);
+
                 }
+
+                if (data != null && data.size() == 13 && data.get(4) == 0x32) {
+                    //new SendDataFirebase(context).execute("{\"action\": \"REGRESO TODAAAAAS - " + Utils.getHora() + "\"}");
+
+                    Integer heartRate = data.get(6);
+                    Integer bloodOxygen = data.get(7);
+                    Integer bloodPressureHypertension = data.get(8);
+                    Integer bloodPressureHypotension = data.get(9);
+
+
+                    guardaDato(context, Constans.HEART_KEY, String.valueOf(heartRate));
+                    guardaDato(context, Constans.BLOOD_OXYGEN_KEY, String.valueOf(bloodOxygen));
+                    guardaDato(context, Constans.BLOOD_PRESSURE_KEY, bloodPressureHypertension + "/" + bloodPressureHypotension);
+                    guardaDato(context, Constans.TEMPERATURE_KEY, data.get(11) + "." + data.get(12));
+
+                }
+
+
             }
         }
     };
 
-    public boolean isLecturasCompletas(Context context, String key){
-        boolean r = false;
-        int theHeartCount = Integer.valueOf(Sharedpreferences.getInstance(context).obtenValorString(key + "_COUNT", "0"));
-        if(theHeartCount < Constans.LECTURAS){
-            Sharedpreferences.getInstance(context).escribeValorString(key + "_COUNT", String.valueOf(theHeartCount + 1));
+    public void guardaDato(Context context, String key, String valor){
+        try{
+            //new SendDataFirebase(context).execute("{\"action\": \"" + key + " - " + valor + " - " + Utils.getHora() + "\"}");
+            if(key.equals(Constans.TEMPERATURE_KEY) && valor != null){
+                Double temperature = Double.valueOf(valor);
+                if (temperature != null && !isNaN(temperature) && temperature > 35 && temperature < 43)
+                    Sharedpreferences.getInstance(context).escribeValorString(Constans.TEMPERATURE_KEY, String.valueOf(temperature));
+            }else if(key.equals(Constans.HEART_KEY) && valor != null){
+                Integer heartRate = Integer.valueOf(valor);
+                if (heartRate != null && !isNaN(heartRate) && heartRate > 40 && heartRate < 226)
+                    Sharedpreferences.getInstance(context).escribeValorString(Constans.HEART_KEY, String.valueOf(heartRate));
+            }else if(key.equals(Constans.BLOOD_OXYGEN_KEY) && valor != null){
+                Integer bloodOxygen = Integer.valueOf(valor);
+                if (bloodOxygen != null && !isNaN(bloodOxygen) && bloodOxygen > 70 && bloodOxygen <= 100)
+                    Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_OXYGEN_KEY, String.valueOf(bloodOxygen));
+            }else if(key.equals(Constans.BLOOD_PRESSURE_KEY) && valor != null){
+                Integer bloodPressureHypertension = Integer.valueOf(valor.split("/")[0]);
+                Integer bloodPressureHypotension = Integer.valueOf(valor.split("/")[1]);
+                if (bloodPressureHypertension != null && !isNaN(bloodPressureHypertension) &&
+                        bloodPressureHypertension > 70 && bloodPressureHypertension < 200 &&
+                        !isNaN(bloodPressureHypotension) && bloodPressureHypotension > 40 && bloodPressureHypotension < 130)
+                    Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_PRESSURE_KEY, bloodPressureHypertension + "/" + bloodPressureHypotension);
+            }
+        }catch (Exception e){
+
+        }
+    }
+
+    public void validaLecturas(Context context){
+        if(isLecturasCompletas(context)) {
+            //validaDatos(data, "TEMPERATURE", context);
+            new SendDataFirebase(context).execute("{\"action\": \"APAGO TODAS - " + Utils.getHora() + "\"}");
+            manager.getOneClickMeasurementCommand(0);
+
         }else{
-            r = true;
-            Sharedpreferences.getInstance(context).escribeValorString(key + "_COUNT", "0");
+            if(Integer.valueOf(Sharedpreferences.getInstance(context).obtenValorString(Constans.COUNT_GENERAL, "0")) == 3){
+                new SendDataFirebase(context).execute("{\"action\": \"PRENDO TODAS - " + Utils.getHora() + "\"}");
+                manager.getOneClickMeasurementCommand(1);
+            }
+        }
+
+        //Valida si el periodo esta completo para enviar la peticion
+        if(isPeriodoCompleto(context)){
+            enviadatos(context);
+        }
+    }
+
+    public boolean isLecturasCompletas(Context context){
+        boolean r = false;
+        try{
+            int theCountGeneral = Integer.valueOf(Sharedpreferences.getInstance(context).obtenValorString(Constans.COUNT_GENERAL, "0"));
+            if(theCountGeneral < Constans.LECTURAS){
+                Sharedpreferences.getInstance(context).escribeValorString(Constans.COUNT_GENERAL, String.valueOf(theCountGeneral + 1));
+            }else{
+                r = true;
+                Sharedpreferences.getInstance(context).escribeValorString(Constans.COUNT_GENERAL, "0");
+            }
+        }catch (Exception e){
+            new SendDataFirebase(context).execute("{\"action\": \"ERROR  - " + e.getMessage() + " - " + Utils.getHora() + "\"}");
         }
         return r;
     }
 
 
     public void validaDatos(List<Integer> data, String tipo, Context context){
-        //new SendDataFirebase(context).execute("{\"Entre a\": \"" + tipo + "-" + Utils.getHora() + "\"}");
-        boolean r1 = false, r2 = false, r3 = false, r4 = false;
-        /*if(tipo.equals("HEART")){
-            int heartRate = data.get(6);
-            if(heartRate != 0)
-                Sharedpreferences.getInstance(context).escribeValorString(Constans.HEART_KEY, String.valueOf(heartRate));
-            r1 = periodoCompleto(context, "HEART");
-        }else if(tipo.equals("BLOOD_OXYGEN")){
-            int bloodOxygen = data.get(6);
-            if(bloodOxygen != 0)
-                Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_OXYGEN_KEY, String.valueOf(bloodOxygen));
-            r2 = periodoCompleto(context, "BLOOD_OXYGEN");
-        }else if(tipo.equals("BLOOD_PRESSURE")){
-            int bloodPressureHigh = data.get(6);
-            int bloodPressureLow = data.get(7);
-            if(bloodPressureHigh != 0 && bloodPressureLow != 0)
-                Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_PRESSURE_KEY, bloodPressureHigh + "/" + bloodPressureLow);
-            r3 = periodoCompleto(context, "BLOOD_PRESSURE");
-        }else if(tipo.equals("TEMPERATURE")){
-            int tempEntero = data.get(6);
-            int tempDecimal = data.get(7);
-            if(tempEntero != 0 && tempDecimal != 0)
-                Sharedpreferences.getInstance(context).escribeValorString(Constans.TEMPERATURE_KEY, tempEntero + "." + tempDecimal);*/
-            r4 = periodoCompleto(context, "TEMPERATURE");
-        //}
-
-        //if(r1 || r2 || r3 || r4){
+        boolean r4 = false;
+        //r4 = periodoCompleto(context, "TEMPERATURE");
         if(r4){
             enviadatos(context);
         }
     }
 
-    public boolean periodoCompleto(Context context, String key){
+    public boolean isPeriodoCompleto(Context context){
         boolean r = false;
-        Long heartLast = Long.valueOf(Sharedpreferences.getInstance(context).obtenValorString(key  + "_LAST", "0"));
-        Long heartNow = System.currentTimeMillis();
+        Long theLastGeneral = Long.valueOf(Sharedpreferences.getInstance(context).obtenValorString(Constans.LAST_TIME_GENERAL, "0"));
+        Long generalNow = System.currentTimeMillis();
 
-        Long millseg = heartNow - heartLast;
-        Sharedpreferences.getInstance(context).escribeValorString(key  + "_TIME", String.valueOf(millseg));
+        Long millseg = generalNow - theLastGeneral;
+        //new SendDataFirebase(context).execute("{\"action\": \"TIME: -" + millseg  + "-" +  Utils.getHora() + "\"}");
         Long periodo = Long.valueOf(Sharedpreferences.getInstance(context).obtenValorString(Constans.PERIODO, "0")) * 1000;
         if(millseg > periodo)
             r = true;
@@ -430,17 +363,15 @@ public class RealTimeService extends Service {
         String _oxygen = Sharedpreferences.getInstance(context).obtenValorString(Constans.BLOOD_OXYGEN_KEY, "0");
         String _pressure = Sharedpreferences.getInstance(context).obtenValorString(Constans.BLOOD_PRESSURE_KEY, "0/0");
         String _temperature = Sharedpreferences.getInstance(context).obtenValorString(Constans.TEMPERATURE_KEY, "0");
-        new SendDataFirebase(context).execute("{\"action\": \"HEART  - " + _heart + " - " + Utils.getHora() + "\"}");
-        new SendDataFirebase(context).execute("{\"action\": \"BLOOD_OXYGEN - " + _oxygen + " - " + Utils.getHora() + "\"}");
-        new SendDataFirebase(context).execute("{\"action\": \"BLOOD_PRESSURE - " + _pressure + " - " + Utils.getHora() + "\"}");
-        new SendDataFirebase(context).execute("{\"action\": \"TEMPERATURE - " + _temperature + " - " + Utils.getHora() + "\"}");
+        //new SendDataFirebase(context).execute("{\"action\": \"HEART  - " + _heart + " - " + Utils.getHora() + "\"}");
+        //new SendDataFirebase(context).execute("{\"action\": \"BLOOD_OXYGEN - " + _oxygen + " - " + Utils.getHora() + "\"}");
+        //new SendDataFirebase(context).execute("{\"action\": \"BLOOD_PRESSURE - " + _pressure + " - " + Utils.getHora() + "\"}");
+        //new SendDataFirebase(context).execute("{\"action\": \"TEMPERATURE - " + _temperature + " - " + Utils.getHora() + "\"}");
+        new SendDataFirebase(context).execute("{\"action\": \"INVOCANDO DATABASE: "  +  Utils.getHora() + "\"}");
         enviaBaseDeDatos(context);
         inicializaValoresPref(context);
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.HEART_LAST, String.valueOf(System.currentTimeMillis()));
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_OXYGEN_LAST, String.valueOf(System.currentTimeMillis()));
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.BLOOD_PRESSURE_LAST, String.valueOf(System.currentTimeMillis()));
-        Sharedpreferences.getInstance(context).escribeValorString(Constans.TEMPERATURE_LAST, String.valueOf(System.currentTimeMillis()));
-        manager.getOneClickMeasurementCommand(0);
+        Sharedpreferences.getInstance(context).escribeValorString(Constans.LAST_TIME_GENERAL, String.valueOf(System.currentTimeMillis()));
+        //manager.getOneClickMeasurementCommand(0);
         //App.mBluetoothLeService.disconnect();
     }
 
@@ -448,62 +379,34 @@ public class RealTimeService extends Service {
 
     public void enviaBaseDeDatos(Context context){
 
-        /*String heartRateString = "255";
-        String bloodOxygenString = "255";
-        String bloodPressureString = "255/255";
-        String temperatureString = "255";
-
-        Double heartRate = Double.valueOf(Sharedpreferences.getInstance(context).obtenValorString(Constans.HEART_KEY, "0"));
-        Double bloodOxygen = Double.valueOf(Sharedpreferences.getInstance(context).obtenValorString(Constans.BLOOD_OXYGEN_KEY, "0"));
-        Double bloodPressureHypertension = Double.valueOf(Sharedpreferences.getInstance(context).obtenValorString(Constans.BLOOD_PRESSURE_KEY, "0/0").split("/")[0]);
-        Double bloodPressureHypotension = Double.valueOf(Sharedpreferences.getInstance(context).obtenValorString(Constans.BLOOD_PRESSURE_KEY, "0/0").split("/")[1]);
-        Double temp = Double.valueOf(Sharedpreferences.getInstance(context).obtenValorString(Constans.TEMPERATURE_KEY, "0"));*/
-
-        /*if (data.get(11) != null && data.get(12) != null && !isNaN(data.get(11)) && !isNaN(data.get(12)))
-            temp = parseFloat(data.get(11) + "." + data.get(12));*/
-
-        /*if (heartRate != null && !isNaN(heartRate) && heartRate > 40 && heartRate < 226)
-            heartRateString = String.valueOf(heartRate);
-
-        if (bloodOxygen != null && !isNaN(bloodOxygen) && bloodOxygen > 70 && bloodOxygen <= 100)
-            bloodOxygenString = String.valueOf(bloodOxygen);
-
-        if (temp != null && !isNaN(temp) && temp > 35 && temp < 43)
-            temperatureString = String.valueOf(temp);
-
-        if (bloodPressureHypertension != null && !isNaN(bloodPressureHypertension) &&
-                bloodPressureHypertension > 70 && bloodPressureHypertension < 200 &&
-                !isNaN(bloodPressureHypotension) && bloodPressureHypotension > 40 && bloodPressureHypotension < 130)
-            bloodPressureString = bloodPressureHypertension + "/" + bloodPressureHypotension;*/
-
         Medida   temperatureParam = new Medida();
         Medida     heartRateParam = new Medida();
         Medida   oxygenationParam = new Medida();
         Medida         bloodParam = new Medida();
 
-        String idPulsera = Sharedpreferences.getInstance(this).obtenValorString(Constans.IDPULSERA, "0");
+        int idPulsera = Integer.valueOf(Sharedpreferences.getInstance(this).obtenValorString(Constans.IDPULSERA, "0"));
 
         temperatureParam.setDispositivo_id(idPulsera);
         temperatureParam.setValor(Sharedpreferences.getInstance(context).obtenValorString(Constans.TEMPERATURE_KEY, "0"));
-        temperatureParam.setDispositivo_parametro_id("1");
+        temperatureParam.setDispositivo_parametro_id(1);
         temperatureParam.setFecha(Utils.getHora());
         temperatureParam.setIdioma("es");
 
         heartRateParam.setDispositivo_id(idPulsera);
         heartRateParam.setValor(Sharedpreferences.getInstance(context).obtenValorString(Constans.HEART_KEY, "0"));
-        heartRateParam.setDispositivo_parametro_id("2");
+        heartRateParam.setDispositivo_parametro_id(2);
         heartRateParam.setFecha(Utils.getHora());
         heartRateParam.setIdioma("es");
 
         oxygenationParam.setDispositivo_id(idPulsera);
         oxygenationParam.setValor(Sharedpreferences.getInstance(context).obtenValorString(Constans.BLOOD_OXYGEN_KEY, "0"));
-        oxygenationParam.setDispositivo_parametro_id("3");
+        oxygenationParam.setDispositivo_parametro_id(3);
         oxygenationParam.setFecha(Utils.getHora());
         oxygenationParam.setIdioma("es");
 
         bloodParam.setDispositivo_id(idPulsera);
         bloodParam.setValor(Sharedpreferences.getInstance(context).obtenValorString(Constans.BLOOD_PRESSURE_KEY, "0/0"));
-        bloodParam.setDispositivo_parametro_id("4");
+        bloodParam.setDispositivo_parametro_id(4);
         bloodParam.setFecha(Utils.getHora());
         bloodParam.setIdioma("es");
 
@@ -588,7 +491,7 @@ public class RealTimeService extends Service {
                         .header("Access-Control-Allow-Methods","")
                         .header("Access-Control-Allow-Origin","")
                         .header("Access-Control-Allow-Credentials","")
-                        .header("Authorization", Constans.TOKENTMPBARER)
+                        .header("Authorization", Constans.TOKEN_KEY)
                         .header("idioma","es")
                         .url(Constans.URL_DEV_SERV)
                         .post(body)
@@ -599,14 +502,17 @@ public class RealTimeService extends Service {
                 client.newCall(request).enqueue(new Callback() {
                     @Override
                     public void onFailure(Call call, IOException e) {
+                        new SendDataFirebase(getApplicationContext()).execute("{\"action\": \"ERROR: " +  e.getMessage() +  Utils.getHora() + "\"}");
                         e.printStackTrace();
                     }
                     @Override
                     public void onResponse(Call call, final Response response) throws IOException {
                         if (!response.isSuccessful()) {
+                            new SendDataFirebase(getApplicationContext()).execute("{\"action\": \"ERROR: " + response.message() +  Utils.getHora() + "\"}");
                             throw new IOException("Unexpected code " + response);
                         } else {
                             Log.d("Response", response.body().toString());
+                            new SendDataFirebase(getApplicationContext()).execute("{\"action\": \"ESCRIBIO EN BD  - " + Utils.getHora() + "\"}");
                         }
                     }
                 });

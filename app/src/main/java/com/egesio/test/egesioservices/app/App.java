@@ -52,10 +52,10 @@ public class App extends Application {
             }
             Log.d("zgy", "onServiceConnected");
             EventBus.getDefault().post(new BaseEvent(BaseEvent.EventType.ONSERVICECONNECTED));
-            if (!Utils.isMyServiceRunning(RealTimeService.class, getApplicationContext())) {
+            /*if (!Utils.isMyServiceRunning(RealTimeService.class, getApplicationContext())) {
                 Intent intentGeoRatioMonitoring = new Intent(getApplicationContext(), RealTimeService.class);
                 startService(intentGeoRatioMonitoring);
-            }
+            }*/
         }
 
         @Override

@@ -26,24 +26,18 @@ public class Constans {
 
     public static final int LECTURAS  = 15;
 
-    public static final String TEMPERATURE_COUNT     = "TEMPERATURE_COUNT";
-    public static final String HEART_COUNT           = "HEART_COUNT";
-    public static final String BLOOD_OXYGEN_COUNT    = "BLOOD_OXYGEN_COUNT";
-    public static final String BLOOD_PRESSURE_COUNT  = "BLOOD_PRESSURE_COUNT";
+    public static final String USER_KEY            = "USER_KEY";
+    public static final String PASSWORD_KEY        = "PASSWORD_KEY";
+    public static final String TOKEN_KEY           = "TOKEN_KEY";
+
 
     public static final String TEMPERATURE_KEY     = "TEMPERATURE_KEY";
     public static final String HEART_KEY           = "HEART_KEY";
     public static final String BLOOD_OXYGEN_KEY    = "BLOOD_OXYGEN_KEY";
     public static final String BLOOD_PRESSURE_KEY  = "BLOOD_PRESSURE_KEY";
 
-    public static final String TEMPERATURE_LAST     = "TEMPERATURE_LAST";
-    public static final String HEART_LAST           = "HEART_LAST";
-    public static final String BLOOD_OXYGEN_LAST    = "BLOOD_OXYGEN_LAST";
-    public static final String BLOOD_PRESSURE_LAST  = "BLOOD_PRESSURE_LAST";
+    public static final String COUNT_GENERAL        = "COUNT_GENERAL";
+    public static final String LAST_TIME_GENERAL    = "LAST_TIME_GENERAL";
 
-    public static final String TEMPERATURE_TIME     = "TEMPERATURE_TIME";
-    public static final String HEART_TIME           = "HEART_TIME";
-    public static final String BLOOD_OXYGEN_TIME    = "BLOOD_OXYGEN_TIME";
-    public static final String BLOOD_PRESSURE_TIME  = "BLOOD_PRESSURE_TIME";
 
 }

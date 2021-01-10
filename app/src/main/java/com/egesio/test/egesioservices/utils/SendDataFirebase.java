@@ -54,9 +54,9 @@ public class SendDataFirebase extends AsyncTask<String, Void, String> {
                     .post(body)
                     .build();
 
-            Response response = client.newCall(request).execute();
+            //Response response = client.newCall(request).execute();
 
-            /*client.newCall(request).enqueue(new Callback() {
+            client.newCall(request).enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException e) {
                     e.printStackTrace();
@@ -69,7 +69,7 @@ public class SendDataFirebase extends AsyncTask<String, Void, String> {
                         Log.d("Response", response.body().toString());
                     }
                 }
-            });*/
+            });
         }catch (Exception e){
             e.printStackTrace();
         }

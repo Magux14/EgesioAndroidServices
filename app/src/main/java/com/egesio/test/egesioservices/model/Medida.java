@@ -5,17 +5,17 @@ import org.json.JSONObject;
 
 public class Medida {
 
-    private String dispositivo_id;
+    private int dispositivo_id;
     private String valor;
-    private String dispositivo_parametro_id;
+    private int dispositivo_parametro_id;
     private String fecha;
     private String idioma;
 
-    public String getDispositivo_id() {
+    public int getDispositivo_id() {
         return dispositivo_id;
     }
 
-    public void setDispositivo_id(String dispositivo_id) {
+    public void setDispositivo_id(int dispositivo_id) {
         this.dispositivo_id = dispositivo_id;
     }
 
@@ -27,11 +27,11 @@ public class Medida {
         this.valor = valor;
     }
 
-    public String getDispositivo_parametro_id() {
+    public int getDispositivo_parametro_id() {
         return dispositivo_parametro_id;
     }
 
-    public void setDispositivo_parametro_id(String dispositivo_parametro_id) {
+    public void setDispositivo_parametro_id(int dispositivo_parametro_id) {
         this.dispositivo_parametro_id = dispositivo_parametro_id;
     }
 

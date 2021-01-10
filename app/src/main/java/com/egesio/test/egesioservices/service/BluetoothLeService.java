@@ -207,6 +207,7 @@ public class BluetoothLeService extends Service {
             } else {
                 return false;
             }
+
         }
         final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
         if (device == null) {
